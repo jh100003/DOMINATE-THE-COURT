@@ -21,6 +21,13 @@ export interface Review {
   date: string;
 }
 
+export interface PlayerInfo {
+  name: string;
+  team: string;
+  comment: string;
+  imageUrl?: string; // Add optional image url
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -33,13 +40,7 @@ export interface Product {
   buyUrl: string; // usually a search query url
   specs?: ProductSpecs; // Optional, mainly for shoes
   reviews?: Review[];
-}
-
-export interface PlayerInfo {
-  name: string;
-  team: string;
-  comment: string;
-  imageUrl?: string; // Add optional image url
+  relatedPlayers?: PlayerInfo[]; // Manually added player data to override/skip AI
 }
 
 export interface RecommendationParams {

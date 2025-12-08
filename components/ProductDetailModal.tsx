@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Loader2, Award, ExternalLink, Activity, Disc, ShoppingBag, Star, Send, Image as ImageIcon, User, AlertCircle } from 'lucide-react';
+import { X, Loader2, Award, ExternalLink, Activity, Disc, ShoppingBag, Star, Send, Image as ImageIcon, User, AlertCircle, ChevronRight } from 'lucide-react';
 import { Product, PlayerInfo, Category, Review } from '../types';
 import { getProductCelebrities } from '../services/geminiService';
 import RadarChart from './RadarChart';
@@ -29,13 +29,19 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
       setReviews(product.reviews || []);
       setPlayers([]); // Reset players when product changes
       
-      // Load AI data only if product is relevant (e.g., shoes)
-      if (product.category === Category.SHOES || product.category === Category.ACCESSORY) {
+      // LOGIC CHANGE: Check for hardcoded relatedPlayers first
+      if (product.relatedPlayers && product.relatedPlayers.length > 0) {
+        setPlayers(product.relatedPlayers);
+        setLoading(false);
+      } else if (product.category === Category.SHOES) {
+        // Only load AI if no hardcoded data exists AND it is a shoe
         setLoading(true);
         getProductCelebrities(product.name)
           .then(data => setPlayers(data))
           .catch(err => console.error(err))
           .finally(() => setLoading(false));
+      } else {
+        setLoading(false);
       }
     }
   }, [product]);
@@ -90,8 +96,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
         onClick={onClose}
       ></div>
 
-      {/* Modal Content */}
-      <div className="relative bg-gray-900 w-full max-w-5xl rounded-2xl overflow-hidden shadow-2xl border border-gray-700 max-h-[90vh] flex flex-col md:flex-row">
+      {/* Modal Container */}
+      <div className="relative bg-gray-900 w-[95%] md:w-full max-w-6xl rounded-2xl overflow-hidden shadow-2xl border border-gray-700 flex flex-col md:flex-row max-h-[90vh] md:h-[85vh]">
         
         {/* Close Button Mobile */}
         <button 
@@ -101,8 +107,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
           <X size={20} />
         </button>
 
-        {/* Left Side: Product Image (Fixed on Desktop) */}
-        <div className="md:w-5/12 bg-gray-800 relative h-64 md:h-auto flex items-center justify-center bg-white/5">
+        {/* Left Side: Product Image */}
+        <div className="w-full md:w-5/12 bg-white relative h-56 md:h-full flex items-center justify-center shrink-0">
            {imgError ? (
             renderFallback()
           ) : (
@@ -116,14 +122,14 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
         </div>
 
         {/* Right Side: Content Tabs */}
-        <div className="md:w-7/12 flex flex-col h-full bg-gray-900">
+        <div className="w-full md:w-7/12 flex flex-col flex-1 min-h-0 bg-gray-900">
           
           {/* Header */}
-          <div className="p-6 md:p-8 pb-0">
+          <div className="p-6 md:p-8 pb-0 shrink-0">
             <div className="flex justify-between items-start">
-              <div>
+              <div className="pr-8">
                 <span className="text-orange-500 font-bold text-sm tracking-wider uppercase">{product.brand}</span>
-                <h2 className="text-3xl font-bold text-white mb-2">{product.name}</h2>
+                <h2 className="text-2xl md:text-3xl font-bold text-white mb-2 leading-tight">{product.name}</h2>
                 <div className="flex items-center space-x-2 mb-4">
                    <span className="bg-gray-800 text-gray-300 text-xs px-2 py-1 rounded border border-gray-700">{product.category}</span>
                    <div className="flex items-center text-yellow-500">
@@ -139,10 +145,10 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
             </div>
 
             {/* Tabs */}
-            <div className="flex space-x-6 border-b border-gray-800 mt-2">
+            <div className="flex space-x-6 border-b border-gray-800 mt-2 overflow-x-auto no-scrollbar">
               <button 
                 onClick={() => setActiveTab('info')}
-                className={`pb-3 text-sm font-bold transition-all relative ${
+                className={`pb-3 text-sm font-bold transition-all relative whitespace-nowrap ${
                   activeTab === 'info' ? 'text-white' : 'text-gray-500 hover:text-gray-300'
                 }`}
               >
@@ -151,27 +157,31 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
               </button>
               <button 
                 onClick={() => setActiveTab('reviews')}
-                className={`pb-3 text-sm font-bold transition-all relative ${
+                className={`pb-3 text-sm font-bold transition-all relative whitespace-nowrap ${
                   activeTab === 'reviews' ? 'text-white' : 'text-gray-500 hover:text-gray-300'
                 }`}
               >
                 리뷰 ({reviews.length})
                 {activeTab === 'reviews' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-500"></span>}
               </button>
-              <button 
-                onClick={() => setActiveTab('gallery')}
-                className={`pb-3 text-sm font-bold transition-all relative ${
-                  activeTab === 'gallery' ? 'text-white' : 'text-gray-500 hover:text-gray-300'
-                }`}
-              >
-                선수 갤러리 (AI)
-                {activeTab === 'gallery' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-500"></span>}
-              </button>
+              
+              {/* Gallery Tab - ONLY SHOW FOR SHOES */}
+              {product.category === Category.SHOES && (
+                <button 
+                  onClick={() => setActiveTab('gallery')}
+                  className={`pb-3 text-sm font-bold transition-all relative whitespace-nowrap ${
+                    activeTab === 'gallery' ? 'text-white' : 'text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  선수 갤러리 ({product.relatedPlayers?.length || 'AI'})
+                  {activeTab === 'gallery' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-500"></span>}
+                </button>
+              )}
             </div>
           </div>
 
           {/* Scrollable Content Area */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8 min-h-0">
             
             {/* --- TAB: INFO --- */}
             {activeTab === 'info' && (
@@ -281,92 +291,63 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
               </div>
             )}
 
-            {/* --- TAB: GALLERY (AI) --- */}
-            {activeTab === 'gallery' && (
+            {/* --- TAB: GALLERY (List View, No Images) --- */}
+            {activeTab === 'gallery' && product.category === Category.SHOES && (
               <div className="animate-fade-in h-full">
-                {product.category !== Category.SHOES ? (
-                  <div className="flex flex-col items-center justify-center h-40 text-gray-500 bg-gray-800/30 rounded-xl">
-                    <ImageIcon size={32} className="mb-2 opacity-50" />
-                    <p>이 제품 카테고리는 선수 착용 갤러리를 지원하지 않습니다.</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="mb-4 flex items-center justify-between">
-                      <h3 className="text-sm font-bold text-gray-300 flex items-center">
-                        <Award className="mr-2 text-orange-500" size={16} />
-                        AI 분석 착용 선수
-                      </h3>
-                      {loading && <span className="text-xs text-gray-500 flex items-center"><Loader2 size={12} className="animate-spin mr-1"/>데이터 분석 중...</span>}
+                <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-gray-300 flex items-center">
+                    <Award className="mr-2 text-orange-500" size={16} />
+                    {product.relatedPlayers && product.relatedPlayers.length > 0 ? '대표 착용 선수' : 'AI 분석 착용 선수'}
+                    </h3>
+                    {loading && <span className="text-xs text-gray-500 flex items-center"><Loader2 size={12} className="animate-spin mr-1"/>데이터 분석 중...</span>}
+                </div>
+
+                {loading ? (
+                    <div className="space-y-3">
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className="bg-gray-800 h-24 rounded-xl animate-pulse border border-gray-700"></div>
+                    ))}
                     </div>
-
-                    {loading ? (
-                      <div className="grid grid-cols-2 gap-4">
-                        {[1, 2, 3, 4].map(i => (
-                          <div key={i} className="bg-gray-800 aspect-square rounded-xl animate-pulse"></div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {players.length > 0 ? (
-                          players.map((player, idx) => (
-                            <div key={idx} className="group relative bg-gray-800 rounded-xl overflow-hidden border border-gray-700 hover:border-orange-500 transition-all aspect-square cursor-pointer" onClick={() => openPlayerImageSearch(player.name)}>
-                              {/* Image or Fallback */}
-                              {player.imageUrl && player.imageUrl.startsWith('http') ? (
-                                <img 
-                                  src={player.imageUrl} 
-                                  alt={player.name}
-                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                                  onError={(e) => {
-                                    // If image fails, replace with fallback UI by hiding img and showing fallback div
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                    const parent = (e.target as HTMLImageElement).parentElement;
-                                    const fallback = parent?.querySelector('.fallback-ui');
-                                    if (fallback) (fallback as HTMLElement).style.display = 'flex';
-                                  }}
-                                />
-                              ) : (
-                                <div className="w-full h-full bg-gray-800 flex flex-col items-center justify-center text-gray-600 group-hover:bg-gray-750 transition-colors">
-                                  <User size={32} className="mb-2" />
-                                  <span className="text-xs">이미지 없음</span>
-                                </div>
-                              )}
-                              
-                              {/* Hidden Fallback UI for onError */}
-                              <div className="fallback-ui hidden absolute inset-0 bg-gray-800 flex-col items-center justify-center text-gray-600">
-                                <AlertCircle size={32} className="mb-2" />
-                                <span className="text-xs">이미지 로드 실패</span>
-                              </div>
-
-                              {/* Overlay Content */}
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-4">
-                                <div className="transform translate-y-2 group-hover:translate-y-0 transition-transform">
-                                  <p className="text-xs text-orange-400 font-bold mb-0.5">{player.team}</p>
-                                  <h4 className="text-lg font-bold text-white leading-tight">{player.name}</h4>
-                                  <p className="text-xs text-gray-300 mt-2 opacity-0 group-hover:opacity-100 transition-opacity line-clamp-2">
-                                    "{player.comment}"
-                                  </p>
-                                </div>
-                              </div>
-                              
-                              {/* Hover Hint */}
-                              <div className="absolute top-2 right-2 bg-black/60 rounded-full p-1.5 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                                <ExternalLink size={14} />
-                              </div>
+                ) : (
+                    <div className="space-y-3">
+                    {players.length > 0 ? (
+                        players.map((player, idx) => (
+                        <div 
+                            key={idx} 
+                            onClick={() => openPlayerImageSearch(player.name)}
+                            className="group bg-gray-800 p-5 rounded-xl border border-gray-700 hover:border-orange-500 hover:bg-gray-750 transition-all cursor-pointer flex justify-between items-center"
+                        >
+                            <div className="flex-1 pr-4">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-bold text-orange-500 uppercase tracking-wider">{player.team}</span>
                             </div>
-                          ))
-                        ) : (
-                          <div className="col-span-2 text-center py-10 bg-gray-800/30 rounded-xl border border-dashed border-gray-700">
-                             <p className="text-gray-500 text-sm">관련 선수 정보를 찾을 수 없습니다.</p>
-                          </div>
-                        )}
-                      </div>
+                            <h4 className="text-lg font-bold text-white mb-1 flex items-center">
+                                {player.name}
+                            </h4>
+                            <p className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors">
+                                "{player.comment}"
+                            </p>
+                            </div>
+                            
+                            <div className="flex flex-col items-center justify-center pl-4 border-l border-gray-700 min-w-[80px]">
+                            <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center group-hover:bg-orange-600 transition-colors mb-1">
+                                <ImageIcon size={20} className="text-gray-400 group-hover:text-white" />
+                            </div>
+                            <span className="text-[10px] text-gray-500 font-medium group-hover:text-orange-400">착용샷 보기</span>
+                            </div>
+                        </div>
+                        ))
+                    ) : (
+                        <div className="text-center py-10 bg-gray-800/30 rounded-xl border border-dashed border-gray-700">
+                            <p className="text-gray-500 text-sm">관련 선수 정보를 찾을 수 없습니다.</p>
+                        </div>
                     )}
-                    {!loading && players.length > 0 && (
-                      <p className="text-[10px] text-gray-600 text-center mt-4">
-                        * 카드를 클릭하면 구글 이미지 검색으로 연결되어 더 많은 사진을 볼 수 있습니다.
-                      </p>
-                    )}
-                  </>
+                    </div>
+                )}
+                {!loading && players.length > 0 && (
+                    <p className="text-[10px] text-gray-600 text-center mt-4">
+                    * 항목을 클릭하면 새 창에서 해당 선수의 착용 이미지를 검색합니다.
+                    </p>
                 )}
               </div>
             )}
@@ -374,7 +355,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
           </div>
 
           {/* Footer: Price & Buy */}
-          <div className="flex items-center justify-between border-t border-gray-800 p-6 bg-gray-900 z-10">
+          <div className="flex items-center justify-between border-t border-gray-800 p-6 bg-gray-900 z-10 shrink-0">
             <div>
               <span className="text-gray-500 text-xs block mb-1">최저가 예상</span>
               <span className="text-2xl font-bold text-white">₩{product.price.toLocaleString()}</span>

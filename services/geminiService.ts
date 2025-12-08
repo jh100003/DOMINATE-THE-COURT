@@ -63,12 +63,29 @@ export const getProductCelebrities = async (productName: string): Promise<Player
   const ai = getAiClient();
   if (!ai) return [];
 
+  // Updated prompt to strictly target Wikimedia for valid images
   const prompt = `
-    "${productName}" 농구화를 실제로 경기에서 착용했거나, 이 시리즈와 연관이 깊은 유명 NBA 선수나 셀럽 3명을 알려주세요.
-    선수의 이름, 소속 팀(전성기 또는 현재), 그리고 그 선수가 이 신발을 신었을 때의 퍼포먼스나 스타일에 대한 짧은 코멘트를 포함해주세요.
+    Find 3 famous basketball players who wear or are known for using "${productName}".
     
-    또한, 가능하다면 해당 선수의 경기 장면이나 프로필 사진의 공개된 URL(위키미디어 등)을 'imageUrl' 필드에 넣어주세요. 
-    만약 확실한 이미지 URL을 찾기 어렵다면, imageUrl은 빈 문자열로 두세요.
+    For each player:
+    1. Identify their Name and Team.
+    2. Write a short comment about their style with this gear.
+    3. Find a DIRECT image URL from "Wikimedia Commons" or a similar open license source.
+       - STRICT RULE: The URL MUST start with "https://" and END with ".jpg", ".png", or ".webp".
+       - STRICT RULE: Do NOT use "google.com/search", "google.com/imgres", or base64 data.
+       - STRICT RULE: Prefer "upload.wikimedia.org" URLs.
+       - If you cannot find a guaranteed direct image link, leave "imageUrl" empty ("").
+
+    Output raw JSON array.
+    Format:
+    [
+      {
+        "name": "Player Name",
+        "team": "Team Name",
+        "comment": "Comment...",
+        "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/..." 
+      }
+    ]
   `;
 
   try {
@@ -76,26 +93,47 @@ export const getProductCelebrities = async (productName: string): Promise<Player
       model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              team: { type: Type.STRING },
-              comment: { type: Type.STRING },
-              imageUrl: { type: Type.STRING, description: "URL of the player image if available" }
-            },
-            required: ["name", "team", "comment"]
-          }
-        }
+        tools: [{ googleSearch: {} }],
       }
     });
 
-    const text = response.text;
-    if (!text) return [];
-    return JSON.parse(text) as PlayerInfo[];
+    let text = response.text || "[]";
+    
+    // Clean up markdown code blocks if present
+    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    
+    // Extract JSON array
+    const firstBracket = text.indexOf('[');
+    const lastBracket = text.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket !== -1) {
+      text = text.substring(firstBracket, lastBracket + 1);
+    }
+
+    const data = JSON.parse(text) as PlayerInfo[];
+    
+    // POST-PROCESSING: Filter out garbage URLs
+    const cleanedData = data.map(player => {
+      let url = player.imageUrl || "";
+      
+      // Reject Google Search result pages masked as images
+      if (url.includes('google.com') || url.includes('search?') || url.includes('imgres?')) {
+        url = "";
+      }
+      
+      // Reject non-image extensions
+      if (url.length > 0 && !/\.(jpg|jpeg|png|webp|gif)$/i.test(url)) {
+         // Allow wikimedia thumbnails which might have complex paths, but usually end in extension.
+         // If it doesn't look like an image file, kill it.
+         url = "";
+      }
+
+      return {
+        ...player,
+        imageUrl: url
+      };
+    });
+
+    return cleanedData;
   } catch (error) {
     console.error("Error fetching player info:", error);
     return [];

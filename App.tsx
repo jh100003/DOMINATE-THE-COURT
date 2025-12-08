@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
 import ProductCard from './components/ProductCard';
 import RecommendationView from './components/RecommendationView';
@@ -9,12 +9,10 @@ import { INITIAL_PRODUCTS } from './constants';
 import { Product, Category } from './types';
 import { Trophy, Filter, SlidersHorizontal, ChevronDown, X } from 'lucide-react';
 
-const PRICE_RANGES = [
-  { id: 'ALL', label: '전체 가격', min: 0, max: Infinity },
-  { id: 'UNDER_150', label: '15만원 미만', min: 0, max: 150000 },
-  { id: '150_200', label: '15만원 - 20만원', min: 150000, max: 200000 },
-  { id: 'OVER_200', label: '20만원 이상', min: 200000, max: Infinity },
-];
+// Calculate dynamic price limits from data
+const allPrices = INITIAL_PRODUCTS.map(p => p.price);
+const MIN_PRICE_LIMIT = Math.floor(Math.min(...allPrices) / 10000) * 10000; // Round down to nearest 10k
+const MAX_PRICE_LIMIT = Math.ceil(Math.max(...allPrices) / 10000) * 10000;  // Round up to nearest 10k
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'ranking' | 'recommend' | 'test'>('ranking');
@@ -26,7 +24,8 @@ const App: React.FC = () => {
   // Filter States
   const [activeCategory, setActiveCategory] = useState<Category | 'ALL'>('ALL');
   const [activeBrand, setActiveBrand] = useState<string>('ALL');
-  const [activePriceId, setActivePriceId] = useState<string>('ALL');
+  // Changed: Price is now a range tuple [min, max]
+  const [priceRange, setPriceRange] = useState<[number, number]>([MIN_PRICE_LIMIT, MAX_PRICE_LIMIT]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   // Check for first-time visit
@@ -56,23 +55,38 @@ const App: React.FC = () => {
       // 2. Brand Filter
       if (activeBrand !== 'ALL' && product.brand !== activeBrand) return false;
 
-      // 3. Price Filter
-      const priceRange = PRICE_RANGES.find(r => r.id === activePriceId);
-      if (priceRange) {
-        if (product.price < priceRange.min || product.price >= priceRange.max) return false;
-      }
+      // 3. Price Filter (Range)
+      if (product.price < priceRange[0] || product.price > priceRange[1]) return false;
 
       return true;
     });
-  }, [activeCategory, activeBrand, activePriceId]);
+  }, [activeCategory, activeBrand, priceRange]);
 
-  const activeFiltersCount = (activeCategory !== 'ALL' ? 1 : 0) + (activeBrand !== 'ALL' ? 1 : 0) + (activePriceId !== 'ALL' ? 1 : 0);
+  const activeFiltersCount = 
+    (activeCategory !== 'ALL' ? 1 : 0) + 
+    (activeBrand !== 'ALL' ? 1 : 0) + 
+    (priceRange[0] !== MIN_PRICE_LIMIT || priceRange[1] !== MAX_PRICE_LIMIT ? 1 : 0);
 
   const resetFilters = () => {
     setActiveCategory('ALL');
     setActiveBrand('ALL');
-    setActivePriceId('ALL');
+    setPriceRange([MIN_PRICE_LIMIT, MAX_PRICE_LIMIT]);
   };
+
+  // Slider Handlers
+  const handleMinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = Math.min(Number(e.target.value), priceRange[1] - 10000); // Prevent crossing
+    setPriceRange([value, priceRange[1]]);
+  };
+
+  const handleMaxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = Math.max(Number(e.target.value), priceRange[0] + 10000); // Prevent crossing
+    setPriceRange([priceRange[0], value]);
+  };
+
+  // Calculate percentage for slider track background
+  const getPercent = (value: number) => 
+    Math.round(((value - MIN_PRICE_LIMIT) / (MAX_PRICE_LIMIT - MIN_PRICE_LIMIT)) * 100);
 
   const renderContent = () => {
     switch (currentView) {
@@ -130,7 +144,7 @@ const App: React.FC = () => {
               </div>
 
               {/* Expandable Filter Panel */}
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isFilterOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isFilterOpen ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}>
                 <div className="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-xl mb-8">
                   <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-700">
                     <h3 className="text-white font-bold flex items-center">
@@ -146,10 +160,10 @@ const App: React.FC = () => {
                     )}
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     {/* Category Filter */}
                     <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">카테고리</label>
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">카테고리</label>
                       <div className="flex flex-wrap gap-2">
                         <button 
                           onClick={() => setActiveCategory('ALL')}
@@ -179,7 +193,7 @@ const App: React.FC = () => {
 
                     {/* Brand Filter */}
                     <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">브랜드</label>
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">브랜드</label>
                       <select 
                         value={activeBrand}
                         onChange={(e) => setActiveBrand(e.target.value)}
@@ -192,18 +206,53 @@ const App: React.FC = () => {
                       </select>
                     </div>
 
-                    {/* Price Filter */}
+                    {/* Price Range Filter */}
                     <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">가격대</label>
-                      <select 
-                        value={activePriceId}
-                        onChange={(e) => setActivePriceId(e.target.value)}
-                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-orange-500 outline-none"
-                      >
-                        {PRICE_RANGES.map(range => (
-                          <option key={range.id} value={range.id}>{range.label}</option>
-                        ))}
-                      </select>
+                      <div className="flex justify-between items-end mb-3">
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">가격대</label>
+                        <span className="text-orange-500 font-bold text-sm">
+                          ₩{priceRange[0].toLocaleString()} ~ ₩{priceRange[1].toLocaleString()}
+                        </span>
+                      </div>
+                      
+                      <div className="relative w-full h-12 flex items-center">
+                        {/* Track Background */}
+                        <div className="absolute w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                           <div 
+                              className="absolute h-full bg-orange-600" 
+                              style={{ 
+                                left: `${getPercent(priceRange[0])}%`, 
+                                right: `${100 - getPercent(priceRange[1])}%` 
+                              }}
+                           ></div>
+                        </div>
+
+                        {/* Min Slider */}
+                        <input 
+                          type="range" 
+                          min={MIN_PRICE_LIMIT} 
+                          max={MAX_PRICE_LIMIT} 
+                          step={10000}
+                          value={priceRange[0]} 
+                          onChange={handleMinChange}
+                          className="absolute w-full pointer-events-none appearance-none bg-transparent z-20 h-2 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-orange-600 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
+                        />
+                        
+                        {/* Max Slider */}
+                        <input 
+                          type="range" 
+                          min={MIN_PRICE_LIMIT} 
+                          max={MAX_PRICE_LIMIT} 
+                          step={10000}
+                          value={priceRange[1]} 
+                          onChange={handleMaxChange}
+                          className="absolute w-full pointer-events-none appearance-none bg-transparent z-30 h-2 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-orange-600 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+                         <span>₩{MIN_PRICE_LIMIT.toLocaleString()}</span>
+                         <span>₩{MAX_PRICE_LIMIT.toLocaleString()}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -217,7 +266,7 @@ const App: React.FC = () => {
                   <ProductCard 
                     key={product.id} 
                     product={product} 
-                    rank={index + 1} // Rank is visual only, relative to current list or original? Usually relative to list is fine for filtering
+                    rank={index + 1} 
                     onClick={setSelectedProduct} 
                   />
                 ))}

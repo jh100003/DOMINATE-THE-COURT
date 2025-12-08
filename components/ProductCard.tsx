@@ -34,7 +34,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, rank, onClick }) => 
         #{rank}
       </div>
       
-      <div className="relative aspect-square overflow-hidden bg-gray-700">
+      <div className="relative aspect-square overflow-hidden bg-white">
         {imgError ? (
           renderFallback()
         ) : (
@@ -43,10 +43,10 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, rank, onClick }) => 
               src={product.imageUrl} 
               alt={product.name} 
               onError={() => setImgError(true)}
-              className="w-full h-full object-contain p-4 group-hover:scale-110 transition-transform duration-500 bg-gray-200"
+              className="w-full h-full object-contain p-4 group-hover:scale-110 transition-transform duration-500 bg-white"
               loading="lazy"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent opacity-20"></div>
+            {/* Removed the dark gradient overlay to keep it clean white */}
           </>
         )}
       </div>
