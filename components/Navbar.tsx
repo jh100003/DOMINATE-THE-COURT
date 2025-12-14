@@ -15,7 +15,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
             <div className="bg-orange-600 p-2 rounded-full mr-3">
               <ShoppingBag className="h-6 w-6 text-white" />
             </div>
-            <span className="text-xl font-bold tracking-tight text-white">HoopsGear<span className="text-orange-500">AI</span></span>
+            <span className="text-xl font-bold tracking-tight text-white">Hoop<span className="text-orange-500">Fit</span></span>
           </div>
           
           <div className="flex space-x-2 sm:space-x-4">

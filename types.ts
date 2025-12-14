@@ -1,3 +1,4 @@
+
 export enum Category {
   SHOES = '농구화',
   BALL = '농구공',
@@ -48,10 +49,14 @@ export interface RecommendationParams {
   weight: number;
   position: string;
   playStyle: string;
+  injuryHistory: string; // Added injury history field
 }
 
 export interface AIRecommendation {
+  productId: string; // Added to link to internal DB
   productName: string;
   reason: string;
   suitableFor: string;
+  matchPercentage: number; // Added for circular graph
+  specs?: ProductSpecs; // Made optional as we might use the static product specs
 }

@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { RecommendationParams, AIRecommendation, PlayerInfo } from '../types';
+import { RecommendationParams, AIRecommendation, PlayerInfo, Category } from '../types';
+import { INITIAL_PRODUCTS } from '../constants';
 
 const getAiClient = () => {
   const apiKey = process.env.API_KEY;
@@ -17,15 +18,33 @@ export const getPersonalizedRecommendations = async (
   const ai = getAiClient();
   if (!ai) return [];
 
+  // Filter for shoes only as recommendations are typically for footwear in this context
+  // or allow all if the user didn't specify, but usually shoes are the main gear.
+  // Let's provide Shoes and Accessories (like ankle braces) if injury is present.
+  const availableProductsContext = INITIAL_PRODUCTS
+    .map(p => `- ID: "${p.id}", Name: "${p.name}", Category: "${p.category}", Features: "${p.description}"`)
+    .join('\n');
+
   const prompt = `
     사용자 정보:
     키: ${params.height}cm
     몸무게: ${params.weight}kg
     포지션: ${params.position}
     플레이스타일: ${params.playStyle}
+    부상 이력 및 걱정되는 부위: ${params.injuryHistory || "없음"}
 
-    위 사용자의 신체 조건과 플레이 스타일에 가장 적합한 현재 시중에서 구할 수 있는 농구화 모델 3가지를 추천해주세요.
-    각 추천에 대해 구체적인 이유(쿠셔닝, 접지력, 피팅 등 신체 조건과의 연관성)를 설명해주세요.
+    보유 제품 데이터베이스:
+    ${availableProductsContext}
+
+    위 "보유 제품 데이터베이스"에 있는 제품들 중에서만 선택하여, 이 사용자에게 가장 적합한 제품 3가지를 추천해주세요.
+    농구화가 가장 우선이지만, 심각한 부상 이력이 있다면 보호대(Category: 보호대/기어)를 섞어서 추천해도 됩니다.
+    
+    각 추천 제품에 대해 다음 정보를 제공해주세요:
+    1. productId (데이터베이스에 있는 정확한 ID 값)
+    2. productName (데이터베이스에 있는 정확한 이름)
+    3. 이 제품이 이 사용자에게 특히 적합한 이유 (짧은 요약)
+    4. 구체적인 추천 사유 (사용자의 신체조건, 스타일, 부상 이력과 연결지어 설명)
+    5. matchPercentage (0-100 사이의 정수): 사용자와의 적합도 점수
   `;
 
   try {
@@ -39,11 +58,13 @@ export const getPersonalizedRecommendations = async (
           items: {
             type: Type.OBJECT,
             properties: {
+              productId: { type: Type.STRING, description: "Must match one of the IDs from the provided list" },
               productName: { type: Type.STRING },
               suitableFor: { type: Type.STRING, description: "이 제품이 특히 좋은 점 (짧게)" },
-              reason: { type: Type.STRING, description: "사용자 스펙에 맞춘 추천 이유" }
+              reason: { type: Type.STRING, description: "사용자 스펙 및 부상 이력에 맞춘 상세 추천 이유" },
+              matchPercentage: { type: Type.NUMBER, description: "User suitability score 0-100" }
             },
-            required: ["productName", "suitableFor", "reason"]
+            required: ["productId", "productName", "suitableFor", "reason", "matchPercentage"]
           }
         }
       }
@@ -63,7 +84,6 @@ export const getProductCelebrities = async (productName: string): Promise<Player
   const ai = getAiClient();
   if (!ai) return [];
 
-  // Updated prompt to strictly target Wikimedia for valid images
   const prompt = `
     Find 3 famous basketball players who wear or are known for using "${productName}".
     
@@ -122,8 +142,6 @@ export const getProductCelebrities = async (productName: string): Promise<Player
       
       // Reject non-image extensions
       if (url.length > 0 && !/\.(jpg|jpeg|png|webp|gif)$/i.test(url)) {
-         // Allow wikimedia thumbnails which might have complex paths, but usually end in extension.
-         // If it doesn't look like an image file, kill it.
          url = "";
       }
 
